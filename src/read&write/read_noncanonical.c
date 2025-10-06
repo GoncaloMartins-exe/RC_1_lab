@@ -23,6 +23,8 @@ int fd = -1;           // File descriptor for open serial port
 struct termios oldtio; // Serial port settings to restore on closing
 volatile int STOP = FALSE;
 
+unsigned char frame[BUF_SIZE];
+
 int openSerialPort(const char *serialPort, int baudRate);
 int closeSerialPort();
 int readByteSerialPort(unsigned char *byte);
@@ -70,18 +72,18 @@ int main(int argc, char *argv[])
         // Read one byte from serial port.
         // NOTE: You must check how many bytes were actually read by reading the return value.
         // In this example, we assume that the byte is always read, which may not be true.
-        unsigned char byte;
-        int bytes = readByteSerialPort(&byte);
+        int bytes = readByteSerialPort(&frame[nBytesBuf]);
+        
         nBytesBuf += bytes;
 
-        printf("Byte received: %c\n", byte);
-
-        if (byte == 'z')
+        if (nBytesBuf >= 256)
         {
             printf("Received 'z' char. Stop reading from serial port.\n");
             STOP = TRUE;
         }
     }
+
+    printf("Flag received: 0x%02X%02X%02X%02X%02X", frame[0], frame[1], frame[2], frame[3], frame[4]);
 
     printf("Total bytes received: %d\n", nBytesBuf);
 
