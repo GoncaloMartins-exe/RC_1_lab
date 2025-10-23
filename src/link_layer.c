@@ -1,8 +1,8 @@
 // Link layer protocol implementation
 
-#include "link_layer.h"
-#include "serial_port.h"
-#include "state_machine.h"
+#include "../include/link_layer.h"
+#include "../include/serial_port.h"
+#include "../include/state_machine.h"
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source

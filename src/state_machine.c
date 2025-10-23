@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "state_machine.h"
+#include "../include/state_machine.h"
 
 int state_machine(int file){
     enum State state = START;

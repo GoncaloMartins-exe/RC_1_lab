@@ -1,6 +1,9 @@
 {
     "files.associations": {
         "stdlib.h": "c",
-        "application_layer.h": "c"
+        "application_layer.h": "c",
+        "link_layer.h": "c",
+        "serial_port.h": "c",
+        "state_machine.h": "c"
     }
 }
