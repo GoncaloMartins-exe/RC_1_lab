@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "application_layer.h"
+#include "state_machine.h"
 
 #define N_TRIES 3
 #define TIMEOUT 4

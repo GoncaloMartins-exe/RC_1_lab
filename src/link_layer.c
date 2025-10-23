@@ -2,6 +2,7 @@
 
 #include "link_layer.h"
 #include "serial_port.h"
+#include "state_machine.h"
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
@@ -11,7 +12,6 @@
 ////////////////////////////////////////////////
 int llopen(LinkLayer connectionParameters)
 {
-    // TODO: Implement this function
 
     return 0;
 }
@@ -21,7 +21,6 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
-    // TODO: Implement this function
 
     return 0;
 }
@@ -31,7 +30,6 @@ int llwrite(const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
 {
-    // TODO: Implement this function
 
     return 0;
 }
@@ -41,7 +39,9 @@ int llread(unsigned char *packet)
 ////////////////////////////////////////////////
 int llclose()
 {
-    // TODO: Implement this function
 
     return 0;
 }
+
+
+
