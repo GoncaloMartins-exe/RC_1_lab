@@ -60,6 +60,8 @@ int transmissorLLopen(LinkLayer connectionParameters, int fd){
     
     while(tries < connectionParameters.nRetransmissions){
         if(writeBytesSerialPort(SET, 5) != 5){
+            tries++;
+            sleep(1);
             continue;
         }
         printf("SET SENT\n");
@@ -91,27 +93,38 @@ int transmissorLLopen(LinkLayer connectionParameters, int fd){
 /////////            RX_LLOPEN           ///////
 ////////////////////////////////////////////////
 int receptorLLopen(LinkLayer connectionParameters, int fd){
-    
     unsigned char byte;
-    
-    while(1){
-        int res = readByteSerialPort(&byte);
-        if(res > 0){
-            int state = state_machine(fd);
-            if(state == 1){
-                printf("SET RECEIVED\n");
-                break;
+    int tries = 0;
+
+    while (tries < connectionParameters.nRetransmissions){
+        alarmEnabled = 1;
+        alarm(connectionParameters.timeout);
+
+        while (alarmEnabled == 1){
+            int res = readByteSerialPort(&byte);
+
+            if (res > 0){
+                int state = state_machine(fd);
+                if (state == 1){
+                    printf("SET RECEIVED\n");
+                    alarm(0);
+
+                    unsigned char UA[5] = {FLAG, A_RX, C_UA, 0x00, FLAG};
+                    UA[3] = UA[1] ^ UA[2];
+
+                    writeBytesSerialPort(UA, 5);
+                    printf("UA SENT\n");
+                    return fd;
+                }
             }
         }
+
+        tries++;
+        printf("Timeout waiting for SET - tries: %d\n", tries);
     }
 
-    unsigned char UA[5] = {FLAG, A_RX, C_UA, 0x00, FLAG};
-    UA[3] = UA[1] ^ UA[2]; //BCC = A xor C
-
-    writeBytesSerialPort(UA, 5);
-    printf("UA SENT\n");
-
-    return fd;
+    printf("Receiver failed to establish connection\n");
+    return -1;
 }
 
 ////////////////////////////////////////////////
@@ -157,6 +170,8 @@ int transmissorLLclose(LinkLayer connectionParameters, int fd)
 
     while (tries < connectionParameters.nRetransmissions) {
         if (writeBytesSerialPort(DISCONNECT, 5) != 5) {
+            tries++;
+            sleep(1);
             continue;
         }
         printf("DISC SENT\n");
@@ -171,7 +186,7 @@ int transmissorLLclose(LinkLayer connectionParameters, int fd)
                 if (state == 3) {
                     printf("DISC RECEIVED\n");
 
-                    unsigned char UA[5] = {FLAG, A_TX, C_UA, 0x00, FLAG};
+                    unsigned char UA[5] = {FLAG, A_RX, C_UA, 0x00, FLAG};
                     UA[3] = UA[1] ^ UA[2];
                     writeBytesSerialPort(UA, 5);
                     printf("UA SENT\n");
