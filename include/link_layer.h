@@ -58,3 +58,4 @@ int transmissorLLopen(LinkLayer connectionParameters, int fd);
 int receptorLLopen(LinkLayer connectionParameters, int fd);
 
 #endif // _LINK_LAYER_H_
+
