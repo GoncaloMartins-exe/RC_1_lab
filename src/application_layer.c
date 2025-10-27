@@ -20,7 +20,40 @@ int sendControlPacket(unsigned char controlField, const char *filename, long fil
 
     packet[index++] = controlField;
 
+
+    // SIZE -------------------------------------------------------
     packet[index++] = T_SIZE;
+    int sizeLength = 0; // Find number of bytes of the fileSize ()
+    long tempSize = fileSize;
+    while (tempSize > 0) {
+        tempSize >>= 8;
+        sizeLength++;
+    }
+    if (sizeLength == 0) sizeLength = 1;
+
+    packet[index++] = sizeLength; // L1
+
+    for (int i = sizeLength - 1; i >= 0; i--) { 
+        packet[index++] = (fileSize >> (8 * i)) & 0xFF;
+    }
+
+
+    // NAME -------------------------------------------------------
+    int nameLength = strlen(filename);
+
+    packet[index++] = T_NAME;
+    packet[index++] = nameLength; // L2
+    memcpy(packet + index, filename, nameLength); // V2
+    index += nameLength;
+
+    // Send packet through link layer
+    int result = llwrite(packet, index);
+    if (result < 0) {
+        fprintf(stderr, "Error sending control packet\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 
