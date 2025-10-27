@@ -57,4 +57,8 @@ int llread(unsigned char *packet);
 // Return 0 on success or -1 on error.
 int llclose();
 
+int transmissorLLopen(LinkLayer connectionParameters, int fd);
+
+int receptorLLopen(LinkLayer connectionParameters, int fd);
+
 #endif // _LINK_LAYER_H_

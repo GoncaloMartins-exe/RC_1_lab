@@ -3,65 +3,81 @@
 #include <string.h>
 
 #include "../include/state_machine.h"
+#include "../include/link_layer.h"
 
-int state_machine(int file){
-    enum State state = START;
-    unsigned char byte, A, C, BCC;
-    while(state != STOP){
+int state_machine(int file)
+{
+    State state = START;
+    unsigned char byte, A = 0, C = 0, BCC = 0;
+
+    while (state != STOP)
+    {
         int t = read(file, &byte, 1);
-        if(t <= 0){
-            return 0;   // error by timeout which means it was not received
-        }
-        switch (state){
-            case START:
-                if(byte == 0x7E){
-                    state = FLAG_RCV;
-                }
-            case FLAG_RCV:
-                if(byte == 0x7E){
-                    state = FLAG_RCV;
-                }
-                else{
-                    A = byte;
-                    state = A_RCV; 
-                }
-                break;
-            case A_RCV:
-                if(byte == 0x7E){
-                    state = FLAG_RCV;
-                }
-                else{
-                    C = byte;
-                    state = C_RCV; 
-                }
-            case C_RCV:
-                BCC = A ^ C;
-                if(byte == 0x7E){
-                    state = FLAG_RCV;
-                }
-                else if(byte == BCC){
-                    state = BCC_OK;
-                }
-                else state = START;
-                break;
-            case BCC_OK:
-                if(byte == 0x7E){
-                    state = STOP;
-                }
-                else{
-                    state = START;
-                }
-                break;
-            default:
+        if (t <= 0)
+            return 0; // timeout ou erro
+
+        switch (state)
+        {
+        case START:
+            if (byte == FLAG)
+                state = FLAG_RCV;
+            break;
+
+        case FLAG_RCV:
+            if (byte == FLAG)
+                state = FLAG_RCV; // FLAG repetido, continua
+            else if (byte == A_TX || byte == A_RX)
+            {
+                A = byte;
+                state = A_RCV;
+            }
+            else
                 state = START;
+            break;
+
+        case A_RCV:
+            if (byte == FLAG)
+                state = FLAG_RCV;
+            else if (byte == C_SET || byte == C_UA || byte == DISC)
+            {
+                C = byte;
+                state = C_RCV;
+            }
+            else
+                state = START;
+            break;
+
+        case C_RCV:
+            BCC = A ^ C;
+            if (byte == FLAG)
+                state = FLAG_RCV;
+            else if (byte == BCC)
+                state = BCC_OK;
+            else
+                state = START;
+            break;
+
+        case BCC_OK:
+            if (byte == FLAG)
+                state = STOP;
+            else
+                state = START;
+            break;
+
+        default:
+            state = START;
+            break;
         }
     }
 
-    if(C == 0x03){
-        return 1;
+    switch (C){
+        case C_SET:
+            return 1;
+        case C_UA:
+            return 2;
+        case DISC:
+            return 3;
+        default:
+            return 0;   //erro
     }
-    if(C == 0x07){
-        return 2;
-    }
-    return 0;
 }
