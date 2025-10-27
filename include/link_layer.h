@@ -33,10 +33,6 @@ typedef struct
     int timeout;
 } LinkLayer;
 
-// Size of maximum acceptable payload.
-// Maximum number of bytes that application layer should send to link layer.
-#define MAX_PAYLOAD_SIZE 1000
-
 // MISC
 #define FALSE 0
 #define TRUE 1
