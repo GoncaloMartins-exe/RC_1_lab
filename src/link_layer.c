@@ -27,7 +27,7 @@ int llopen(LinkLayer connectionParameters)
         return -1;
     }
 
-    struct sigaction act;
+    struct sigaction act = {0};
     act.sa_handler = alarmHandler;
     if (sigaction(SIGALRM, &act, NULL) < 0)
     {
@@ -111,6 +111,7 @@ int transmissorLLopen(LinkLayer connectionParameters, int fd){
     }
 
     printf("Fail establishing connection\n");
+    return -1;
 }
 
 ////////////////////////////////////////////////
@@ -137,5 +138,5 @@ int receptorLLopen(LinkLayer connectionParameters, int fd){
     writeBytesSerialPort(UA, 5);
     printf("UA SENT\n");
 
-    return;
+    return fd;
 }
