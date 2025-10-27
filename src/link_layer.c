@@ -11,14 +11,9 @@
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
-int alarmEnabled = FALSE;
-int alarmCount = 0;
-
-void alarmHandler(int sig)
-{
-    alarmEnabled = FALSE;
-    alarmCount++;
-}
+extern int alarmEnabled;
+extern int alarmCount;
+extern void alarmHandler(int sig);
 
 ////////////////////////////////////////////////
 /////////            LLOPEN              ///////
