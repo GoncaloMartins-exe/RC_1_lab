@@ -160,12 +160,35 @@ int llwrite(const unsigned char *buf, int bufSize)
 
 unsigned char calculateBCC2(const unsigned char *buf, int bufSize)
 {
-
+    unsigned char bcc2 = 0x00;
+    for (int i = 0; i < bufSize; i++)
+        bcc2 ^= buf[i];
+    return bcc2;
 }
 
 int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *output)
 {
+    int outIndex = 0;
 
+    for (int i = 0; i < inputSize; i++)
+    {
+        if (input[i] == FLAG)
+        {
+            output[outIndex++] = ESC;
+            output[outIndex++] = FLAG_ESC;
+        }
+        else if (input[i] == ESC)
+        {
+            output[outIndex++] = ESC;
+            output[outIndex++] = ESC_ESC;
+        }
+        else
+        {
+            output[outIndex++] = input[i];
+        }
+    }
+
+    return outIndex; // size after stuffing
 }
 
 ////////////////////////////////////////////////
