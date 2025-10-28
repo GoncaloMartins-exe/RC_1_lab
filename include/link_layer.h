@@ -4,19 +4,29 @@
 #ifndef _LINK_LAYER_H_
 #define _LINK_LAYER_H_
 
-#define FLAG 0x7E
+#define FLAG   0x7E
 
-#define A_TX 0x03
-#define A_RX 0x01
+#define A_TX   0x03
+#define A_RX   0x01
 
-#define C_SET 0x03
-#define C_UA 0x07
-#define C_RR0 0xAA
-#define C_RR1 0xAB
+#define C_SET  0x03
+#define C_UA   0x07
+#define C_RR0  0xAA
+#define C_RR1  0xAB
 #define C_REJ0 0x54
 #define C_REJ1 0x55
 
+#define ESC       0x7D
+#define FLAG_ESC  0x5E
+#define ESC_ESC   0x5D
+
 #define DISC 0x0B
+
+#define TRUE  1
+#define FALSE 0
+
+extern LinkLayer currentParams;
+extern int linkFd;
 
 typedef enum
 {
@@ -53,9 +63,14 @@ int llread(unsigned char *packet);
 // Return 0 on success or -1 on error.
 int llclose();
 
-int transmissorLLopen(LinkLayer connectionParameters, int fd);
+int transmissorLLopen();
+int receptorLLopen();
 
-int receptorLLopen(LinkLayer connectionParameters, int fd);
+int readControlField();
+int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int sequenceNumber);
+int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *output);
+unsigned char calculateBCC2(const unsigned char *buf, int bufSize);
+
 
 #endif // _LINK_LAYER_H_
 

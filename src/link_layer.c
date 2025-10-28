@@ -16,6 +16,9 @@ extern int alarmEnabled;
 extern int alarmCount;
 extern void alarmHandler(int sig);
 
+LinkLayer currentParams;
+int linkFd = -1;
+
 ////////////////////////////////////////////////
 /////////            LLOPEN              ///////
 ////////////////////////////////////////////////
@@ -26,6 +29,9 @@ int llopen(LinkLayer connectionParameters)
         perror("Error opening serial port!");
         return -1;
     }
+
+    linkFd = fd;
+    currentParams = connectionParameters;
 
     struct sigaction act = {0};
     act.sa_handler = alarmHandler;
@@ -38,10 +44,10 @@ int llopen(LinkLayer connectionParameters)
 
     int TxRx;
     if(connectionParameters.role == LlTx){
-        TxRx = transmissorLLopen(connectionParameters, fd);
+        TxRx = transmissorLLopen();
     }
     else{
-        TxRx = receptorLLopen(connectionParameters, fd);
+        TxRx = receptorLLopen();
     }
 
     return TxRx;
@@ -50,7 +56,7 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 /////////            TX_LLOPEN           ///////
 ////////////////////////////////////////////////
-int transmissorLLopen(LinkLayer connectionParameters, int fd){
+int transmissorLLopen(){
 
     unsigned char SET[5] = {FLAG, A_TX, C_SET, 0x00, FLAG};
     SET[3] = SET[1] ^ SET[2]; //BCC = A xor C
@@ -58,25 +64,24 @@ int transmissorLLopen(LinkLayer connectionParameters, int fd){
     unsigned char byte;
     int tries = 0;
     
-    while(tries < connectionParameters.nRetransmissions){
+    while(tries < currentParams.nRetransmissions){
         if(writeBytesSerialPort(SET, 5) != 5){
+            perror("Failed to send SET");
             tries++;
-            sleep(1);
-            continue;
         }
         printf("SET SENT\n");
 
         alarmEnabled = 1;
-        alarm(connectionParameters.timeout);
+        alarm(currentParams.timeout);
 
         while(alarmEnabled == 1){
             int res = readByteSerialPort(&byte);
             if(res > 0){
-                int state = state_machine(fd);
+                int state = state_machine(byte);
                 if(state == 2){
-                    printf("UA recebido\n");
+                    printf("UA received\n");
                     alarm(0);
-                    return fd;
+                    return linkFd;
                 }
             }
         }
@@ -92,19 +97,19 @@ int transmissorLLopen(LinkLayer connectionParameters, int fd){
 ////////////////////////////////////////////////
 /////////            RX_LLOPEN           ///////
 ////////////////////////////////////////////////
-int receptorLLopen(LinkLayer connectionParameters, int fd){
+int receptorLLopen(){
     unsigned char byte;
     int tries = 0;
 
-    while (tries < connectionParameters.nRetransmissions){
+    while (tries < currentParams.nRetransmissions){
         alarmEnabled = 1;
-        alarm(connectionParameters.timeout);
+        alarm(currentParams.timeout);
 
         while (alarmEnabled == 1){
             int res = readByteSerialPort(&byte);
 
             if (res > 0){
-                int state = state_machine(fd);
+                int state = state_machine(byte);
                 if (state == 1){
                     printf("SET RECEIVED\n");
                     alarm(0);
@@ -114,7 +119,7 @@ int receptorLLopen(LinkLayer connectionParameters, int fd){
 
                     writeBytesSerialPort(UA, 5);
                     printf("UA SENT\n");
-                    return fd;
+                    return linkFd;
                 }
             }
         }
@@ -127,6 +132,7 @@ int receptorLLopen(LinkLayer connectionParameters, int fd){
     return -1;
 }
 
+//_____________________________________________________________________________________________________________________
 ////////////////////////////////////////////////
 /////////           LLWRITE              ///////
 ////////////////////////////////////////////////
@@ -136,6 +142,21 @@ int llwrite(const unsigned char *buf, int bufSize)
     return 0;
 }
 
+int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *output)
+{
+    
+}
+
+////////////////////////////////////////////////
+/////////       I-FRAME BUILDER          ///////
+////////////////////////////////////////////////
+
+int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int sequenceNumber)
+{
+    
+}
+
+//_____________________________________________________________________________________________________________________
 ////////////////////////////////////////////////
 /////////            LLREAD              ///////
 ////////////////////////////////////////////////
@@ -145,22 +166,24 @@ int llread(unsigned char *packet)
     return 0;
 }
 
+//_____________________________________________________________________________________________________________________
 ////////////////////////////////////////////////
 /////////            LLCLOSE             ///////
 ////////////////////////////////////////////////
-int llclose(LinkLayer connectionParameters, int fd)
+int llclose()
 {
-    if (connectionParameters.role == LlTx) {
-        return transmissorLLclose(connectionParameters, fd);
+    if (linkFd < 0) return -1;
+    if (currentParams.role == LlTx) {
+        return transmissorLLclose();
     } else {
-        return receptorLLclose(connectionParameters, fd);
+        return receptorLLclose();
     }
 }
 
 ////////////////////////////////////////////////
 /////////         TX_LLCLOSE             ///////
 ////////////////////////////////////////////////
-int transmissorLLclose(LinkLayer connectionParameters, int fd)
+int transmissorLLclose()
 {
     unsigned char DISCONNECT[5] = {FLAG, A_TX, DISC, 0x00, FLAG};
     DISCONNECT[3] = DISCONNECT[1] ^ DISCONNECT[2];
@@ -168,21 +191,20 @@ int transmissorLLclose(LinkLayer connectionParameters, int fd)
     unsigned char byte;
     int tries = 0;
 
-    while (tries < connectionParameters.nRetransmissions) {
+    while (tries < currentParams.nRetransmissions) {
         if (writeBytesSerialPort(DISCONNECT, 5) != 5) {
             tries++;
-            sleep(1);
             continue;
         }
         printf("DISC SENT\n");
 
         alarmEnabled = 1;
-        alarm(connectionParameters.timeout);
+        alarm(currentParams.timeout);
 
         while (alarmEnabled == 1) {
             int res = readByteSerialPort(&byte);
             if (res > 0) {
-                int state = state_machine(fd);
+                int state = state_machine(byte);
                 if (state == 3) {
                     printf("DISC RECEIVED\n");
 
@@ -211,14 +233,14 @@ int transmissorLLclose(LinkLayer connectionParameters, int fd)
 ////////////////////////////////////////////////
 /////////         RX_LLCLOSE             ///////
 ////////////////////////////////////////////////
-int receptorLLclose(LinkLayer connectionParameters, int fd)
+int receptorLLclose()
 {
     unsigned char byte;
 
     while (1) {
         int res = readByteSerialPort(&byte);
         if (res > 0) {
-            int state = state_machine(fd);
+            int state = state_machine(byte);
             if (state == 3) {
                 printf("DISC RECEIVED\n");
                 break;
@@ -234,7 +256,7 @@ int receptorLLclose(LinkLayer connectionParameters, int fd)
     while (1) {
         int res = readByteSerialPort(&byte);
         if (res > 0) {
-            int state = state_machine(fd);
+            int state = state_machine(byte);
             if (state == 2) {
                 printf("UA RECEIVED\n");
                 closeSerialPort();
