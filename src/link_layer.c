@@ -138,13 +138,34 @@ int receptorLLopen(){
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
+    if (linkFd < 0) {
+        fprintf(stderr, "llwrite: link not open\n");
+        return -1;
+    }
 
-    return 0;
+    int tries = 0;
+    static int sequenceNumber = 0; // 0 or 1
+
+    unsigned char frame[2 * (bufSize + 6)];
+    int frameSize = buildIFrame(frame, buf, bufSize, sequenceNumber);
+
+//...........
+
+    return -1;
+}
+
+////////////////////////////////////////////////
+/////////      BYTE STUFFING HELPERS     ///////
+////////////////////////////////////////////////
+
+unsigned char calculateBCC2(const unsigned char *buf, int bufSize)
+{
+
 }
 
 int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *output)
 {
-    
+
 }
 
 ////////////////////////////////////////////////
@@ -153,7 +174,33 @@ int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *
 
 int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int sequenceNumber)
 {
-    
+    int index = 0;
+    unsigned char A = A_TX;
+    unsigned char C = (sequenceNumber << 6); // 0x00 or 0x40
+    unsigned char BCC1 = A ^ C;
+    unsigned char BCC2 = calculateBCC2(buf, bufSize);
+
+    frame[index++] = FLAG;
+    frame[index++] = A;
+    frame[index++] = C;
+    frame[index++] = BCC1;
+
+    // Data with stuffing
+    unsigned char *stuffedData = malloc(2 * bufSize + 2);
+    int stuffedSize = applyByteStuffing(buf, bufSize, stuffedData);
+    for (int i = 0; i < stuffedSize; i++)
+        frame[index++] = stuffedData[i];
+
+    // BCC2 with stuffing
+    unsigned char bcc2Stuffed[2];
+    int bcc2Size = applyByteStuffing(&BCC2, 1, bcc2Stuffed);
+    for (int i = 0; i < bcc2Size; i++)
+        frame[index++] = bcc2Stuffed[i];
+
+    frame[index++] = FLAG;
+
+    free(stuffedData);
+    return index; // total size
 }
 
 //_____________________________________________________________________________________________________________________
