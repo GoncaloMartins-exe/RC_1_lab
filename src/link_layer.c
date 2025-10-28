@@ -149,8 +149,63 @@ int llwrite(const unsigned char *buf, int bufSize)
     unsigned char frame[2 * (bufSize + 6)];
     int frameSize = buildIFrame(frame, buf, bufSize, sequenceNumber);
 
-//...........
+    while (tries < currentParams.nRetransmissions) {
+        if (writeBytesSerialPort(frame, frameSize) != frameSize) {
+            tries++;
+            continue;
+        }
 
+        // Wait for RR/REJ
+        alarmEnabled = TRUE;
+        alarm(currentParams.timeout);
+
+        int control = readControlField(); // returns -1 of timeout
+
+        if (control == -1) {
+            // timeout: reesend
+            tries++;
+            printf("llwrite: timeout waiting for RR/REJ — try %d\n", tries);
+            continue;
+        }
+
+        if (control == C_RR0 || control == C_RR1) {
+            sequenceNumber ^= 1;
+            alarm(0);
+            return bufSize; // success
+        }
+        else if (control == C_REJ0 || control == C_REJ1) {
+            // REJ received — retransmit
+            printf("llwrite: REJ received — retransmitting\n");
+            tries++;
+            continue;
+        }
+        else {
+            // another frame, ignore
+            printf("llwrite: unexpected control 0x%02X — ignoring\n", control);
+            tries++;
+            continue;
+        }
+    }
+
+    printf("llwrite: failed after %d tries\n", tries);
+    return -1;
+}
+
+int readControlField() {
+    unsigned char buf[5];
+    int i = 0;
+
+    while (readByteSerialPort(&buf[i]) > 0) {
+        if (buf[i] == FLAG && i >= 4) {
+            unsigned char A = buf[1];
+            unsigned char C = buf[2];
+            unsigned char BCC = buf[3];
+            if ((A ^ C) == BCC) {
+                return C; // control
+            }
+        }
+        i++;
+    }
     return -1;
 }
 
