@@ -12,14 +12,8 @@ typedef struct {
     unsigned char receivedBCC;
 } StateMachine;
 
-void stateMachineInit(StateMachine *sm, unsigned char address, unsigned char control);
+void reset_state_machine();
 
-void stateMachineUpdate(StateMachine *sm, unsigned char byte);
-
-void stateMachineReset(StateMachine *sm);
-
-int stateMachineIsComplete(StateMachine *sm);
-
-int state_machine(int file);
+int state_machine(unsigned char byte);
 
 #endif
