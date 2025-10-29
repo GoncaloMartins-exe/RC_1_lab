@@ -71,6 +71,12 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
 int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *output);
 unsigned char calculateBCC2(const unsigned char *buf, int bufSize);
 
+int readFrame(unsigned char *frame, int maxSize); 
+int validateIFrame(const unsigned char *frame, int frameSize, unsigned char *packet, int *sequenceNumber, int maxPacketSize);
+int destuffing(const unsigned char *input, int inputSize, unsigned char *output, int maxOutput);
+
+void sendRR(int sequenceNumber);
+void sendREJ(int sequenceNumber);
 
 #endif // _LINK_LAYER_H_
 

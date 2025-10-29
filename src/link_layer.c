@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
@@ -18,6 +19,7 @@ extern void alarmHandler(int sig);
 
 LinkLayer currentParams;
 int linkFd = -1;
+FRAME_MAX_SIZE = 4096;
 
 ////////////////////////////////////////////////
 /////////            LLOPEN              ///////
@@ -147,6 +149,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     static int sequenceNumber = 0; // 0 or 1
 
     unsigned char frame[2 * (bufSize + 6)];
+    FRAME_MAX_SIZE = 2 * (bufSize + 6);
     int frameSize = buildIFrame(frame, buf, bufSize, sequenceNumber);
 
     while (tries < currentParams.nRetransmissions) {
@@ -272,9 +275,9 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
     // BCC2 with stuffing
     unsigned char bcc2Stuffed[2];
     int bcc2Size = applyByteStuffing(&BCC2, 1, bcc2Stuffed);
-    for (int i = 0; i < bcc2Size; i++)
+    for (int i = 0; i < bcc2Size; i++){
         frame[index++] = bcc2Stuffed[i];
-
+    }
     frame[index++] = FLAG;
 
     free(stuffedData);
@@ -287,8 +290,155 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
 {
+    unsigned char frame[FRAME_MAX_SIZE];
+    int frameSize = readFrame(frame, FRAME_MAX_SIZE);
+    if (frameSize <= 0) {
+        printf("llread: failed to read frame\n");
+        return -1;
+    }
 
-    return 0;
+    int seqNum;
+    int payloadSize = validateIFrame(frame, frameSize, packet, &seqNum, FRAME_MAX_SIZE);
+
+    if(payloadSize < 0){
+        printf("llread: invalid frame, sending REJ\n");
+        sendREJ(seqNum);
+        return -1;
+    }
+
+    sendRR(seqNum);
+    return payloadSize;
+}
+
+int readFrame(unsigned char *frame, int maxSize){
+    unsigned char byte;
+    int i = 0;
+    int start = 0;
+
+    int maxTries = 10000;
+    while(maxTries-- > 0){
+        int res = readByteSerialPort(&byte);
+        if(res <= 0) continue;
+
+        if(byte == FLAG){
+            if(start == 0){
+                start = 1;
+                if(i < maxSize) frame[i++] = byte;
+                else return -1; // overflow
+            }
+            else{
+                if(i < maxSize) frame[i++] = byte;
+                else return -1; // overflow
+                break;
+            }
+        }
+        else if(start){
+            if(i < maxSize) frame[i++] = byte;
+            else return -1; // overflow
+        }
+    }
+    if(maxTries == 0 && i > 0){
+        return -1;
+    }
+    return i;
+}
+
+int validateIFrame(const unsigned char *frame, int frameSize, unsigned char *packet, int *sequenceNumber, int maxPacketSize){
+    if(frameSize < 6) return -1;
+
+    unsigned char A = frame[1];
+    unsigned char C = frame[2];
+    unsigned char BCC1 = frame[3];
+
+    *sequenceNumber = (C >> 6) & 0x01;
+
+    if((A ^ C) != BCC1){
+        printf("llread: BCC1 error\n");
+        return -1;
+    }
+
+    //Remove FLAGS, header, trailer
+    int dataSize = frameSize - 5;
+
+    if (dataSize <= 0) {
+        return -1;
+    }
+
+    unsigned char *destuffed = malloc(dataSize);
+    if (!destuffed) return -1;
+    int destuffedSize = destuffing(frame + 4, dataSize, destuffed, FRAME_MAX_SIZE);
+
+    if (destuffedSize <= 0) {
+        free(destuffed);
+        printf("llread: destuffing failed\n");
+        return -1;
+    }
+
+    unsigned char receivedBCC2 = destuffed[destuffedSize - 1];
+    unsigned char calculatedBCC2 = calculateBCC2(destuffed, destuffedSize - 1);
+
+    if(receivedBCC2 != calculatedBCC2){
+        printf("llread: BCC2 error\n");
+        free(destuffed);
+        return -1;
+    }
+
+    memcpy(packet, destuffed, destuffedSize - 1);
+    free(destuffed);
+    return destuffedSize - 1;
+}
+
+int destuffing(const unsigned char *input, int inputSize, unsigned char *output, int maxOutput){
+    int Index = 0;
+
+    for(int i = 0; i < inputSize; i++){
+        if(input[i] == ESC){
+            if (i + 1 >= inputSize) {
+                return -1;
+            }
+            if(input[i+1] == FLAG_ESC){
+                output[Index++] = FLAG;
+            }
+            else if(input[i+1] == ESC_ESC){
+                output[Index++] = ESC;
+            }
+            else {
+                return -1;
+            }
+            i++;
+        }
+        else{
+            if (Index >= maxOutput) return -1;
+            output[Index++] = input[i];
+        }
+    }
+    return Index;
+}
+
+void sendRR(int sequenceNumber){
+    unsigned char RR[5] = {FLAG, A_RX, 0x00, 0x00, FLAG};
+    if(sequenceNumber == 0){
+        RR[2] = C_RR1;
+    }
+    else{
+        RR[2] = C_RR0;
+    }
+    RR[3] = RR[1] ^ RR[2];
+    writeBytesSerialPort(RR, 5);
+    printf("RR sent (seq=%d)\n", sequenceNumber);
+}
+
+void sendREJ(int sequenceNumber){
+    unsigned char REJ[5] = {FLAG, A_RX, 0x00, 0x00, FLAG};
+    if(sequenceNumber == 0){
+        REJ[2] = C_REJ1;
+    }
+    else{
+        REJ[2] = C_REJ0;
+    }
+    REJ[3] = REJ[1] ^ REJ[2];
+    writeBytesSerialPort(REJ, 5);
+    printf("REJ sent (seq=%d)\n", sequenceNumber);
 }
 
 //_____________________________________________________________________________________________________________________
