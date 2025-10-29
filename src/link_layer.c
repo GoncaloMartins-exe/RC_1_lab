@@ -293,8 +293,12 @@ int llread(unsigned char *packet)
         printf("llread: failed to read frame\n");
         return -1;
     }
-    
-    return 0;
+
+    int seqNum;
+    int payloadSize = validateIFrame(frame, frameSize, packet, &seqNum);
+
+
+    return payloadSize;
 }
 
 int readFrame(unsigned char *frame){
@@ -321,6 +325,44 @@ int readFrame(unsigned char *frame){
         }
     }
     return i;
+}
+
+int validateIFrame(const unsigned char *frame,  int frameSize, unsigned char *packet, int *sequenceNumber){
+    if(frameSize < 6) return -1;
+
+    unsigned char A = frame[1];
+    unsigned char C = frame[2];
+    unsigned char BCC1 = frame[3];
+
+    if((A ^ C) != BCC1){
+        printf("llread: BCC1 error\n");
+        return -1;
+    }
+
+    //Remove FLAGS, header, trailer
+    int dataSize = frameSize - 5;
+    unsigned char *destuffed = malloc(dataSize);
+    int destuffedSize = destuffing(frame + 4, dataSize, destuffed);
+}
+
+int destuffing(const unsigned char *input, int inputSize, unsigned char *output){
+    int Index = 0;
+
+    for(int i = 0; i < inputSize; i++){
+        if(input[i] == ESC){
+            if(input[i+1] == FLAG_ESC){
+                output[Index++] = FLAG;
+            }
+            else if(input[i+1] == ESC_ESC){
+                output[Index++] = ESC;
+            }
+            i++;
+        }
+        else{
+            output[Index++] = input[i];
+        }
+    }
+    return Index;
 }
 
 //_____________________________________________________________________________________________________________________

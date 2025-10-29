@@ -72,7 +72,8 @@ int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *
 unsigned char calculateBCC2(const unsigned char *buf, int bufSize);
 
 int readFrame(unsigned char *frame); 
-
+int validateIFrame(const unsigned char *frame,  int frameSize, unsigned char *packet, int *sequenceNumber);
+int destuffing(const unsigned char *input, int inputSize, unsigned char *output);
 
 #endif // _LINK_LAYER_H_
 
