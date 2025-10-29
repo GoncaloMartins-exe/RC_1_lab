@@ -57,6 +57,22 @@ int sendControlPacket(unsigned char controlField, const char *filename, long fil
 }
 
 
+int sendDataPacket(const unsigned char *data, int dataLength){
+    unsigned char dataFrame[MAX_PAYLOAD_SIZE];
+    int index = 0;
+
+    dataFrame[index++] = C_DATA; // C (Control Field)
+
+    dataFrame[index++] = (dataLength >> 8) & 0xFF; // L2 
+    dataFrame[index++] = dataLength & 0xFF;        // L1
+
+    memcpy(dataFrame + index, data, dataLength);   // Copy data bytes
+    index += dataLength;
+
+    int result = llwrite(dataFrame, index);
+    return result;
+}
+
 
 int transmitterMain(const char *filename) {
     FILE *file = fopen(filename, "rb");
