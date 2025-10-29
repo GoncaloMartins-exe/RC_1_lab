@@ -71,6 +71,8 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
 int applyByteStuffing(const unsigned char *input, int inputSize, unsigned char *output);
 unsigned char calculateBCC2(const unsigned char *buf, int bufSize);
 
+int readFrame(unsigned char *frame); 
+
 
 #endif // _LINK_LAYER_H_
 

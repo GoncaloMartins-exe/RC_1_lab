@@ -287,8 +287,40 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
 {
-
+    unsigned char frame[4096];
+    int frameSize = readFrame(frame);
+    if (frameSize <= 0) {
+        printf("llread: failed to read frame\n");
+        return -1;
+    }
+    
     return 0;
+}
+
+int readFrame(unsigned char *frame){
+    unsigned char byte;
+    int i = 0;
+    int start = 0;
+
+    while(TRUE){
+        int res = readByteSerialPort(&byte);
+        if(res <= 0) continue;
+
+        if(byte == FLAG){
+            if(start == 0){
+                start = 1;
+                frame[i++] = byte;
+            }
+            else{
+                frame[i++] = byte;
+                break;
+            }
+        }
+        else if(start){
+            frame[i++] = byte;
+        }
+    }
+    return i;
 }
 
 //_____________________________________________________________________________________________________________________
