@@ -272,9 +272,9 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
     // BCC2 with stuffing
     unsigned char bcc2Stuffed[2];
     int bcc2Size = applyByteStuffing(&BCC2, 1, bcc2Stuffed);
-    for (int i = 0; i < bcc2Size; i++)
+    for (int i = 0; i < bcc2Size; i++){
         frame[index++] = bcc2Stuffed[i];
-
+    }
     frame[index++] = FLAG;
 
     free(stuffedData);
@@ -343,6 +343,19 @@ int validateIFrame(const unsigned char *frame,  int frameSize, unsigned char *pa
     int dataSize = frameSize - 5;
     unsigned char *destuffed = malloc(dataSize);
     int destuffedSize = destuffing(frame + 4, dataSize, destuffed);
+
+    unsigned char receivedBCC2 = destuffed[destuffedSize - 1];
+    unsigned char calculatedBCC2 = calculateBCC2(destuffed, destuffedSize - 1);
+
+    if(receivedBCC2 != calculateBCC2){
+        printf("llread: BCC2 error\n");
+        free(destuffed);
+        return -1;
+    }
+
+    memcpy(packet, destuffed, destuffedSize - 1);
+    free(destuffed);
+    return destuffedSize - 1;
 }
 
 int destuffing(const unsigned char *input, int inputSize, unsigned char *output){
