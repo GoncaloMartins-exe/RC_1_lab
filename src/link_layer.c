@@ -19,6 +19,7 @@ extern void alarmHandler(int sig);
 
 LinkLayer currentParams;
 int linkFd = -1;
+FRAME_MAX_SIZE = 4096;
 
 ////////////////////////////////////////////////
 /////////            LLOPEN              ///////
@@ -148,6 +149,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     static int sequenceNumber = 0; // 0 or 1
 
     unsigned char frame[2 * (bufSize + 6)];
+    FRAME_MAX_SIZE = 2 * (bufSize + 6);
     int frameSize = buildIFrame(frame, buf, bufSize, sequenceNumber);
 
     while (tries < currentParams.nRetransmissions) {
@@ -313,7 +315,8 @@ int readFrame(unsigned char *frame, int maxSize){
     int i = 0;
     int start = 0;
 
-    while(TRUE){
+    int maxTries = 10000;
+    while(maxTries-- > 0){
         int res = readByteSerialPort(&byte);
         if(res <= 0) continue;
 
@@ -333,6 +336,9 @@ int readFrame(unsigned char *frame, int maxSize){
             if(i < maxSize) frame[i++] = byte;
             else return -1; // overflow
         }
+    }
+    if(maxTries == 0 && i > 0){
+        return -1;
     }
     return i;
 }
@@ -432,7 +438,7 @@ void sendREJ(int sequenceNumber){
     }
     REJ[3] = REJ[1] ^ REJ[2];
     writeBytesSerialPort(REJ, 5);
-    printf("RR sent (seq=%d)\n", sequenceNumber);
+    printf("REJ sent (seq=%d)\n", sequenceNumber);
 }
 
 //_____________________________________________________________________________________________________________________

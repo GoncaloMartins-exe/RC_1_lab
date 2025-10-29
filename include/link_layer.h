@@ -25,8 +25,6 @@
 #define TRUE  1
 #define FALSE 0
 
-#define FRAME_MAX_SIZE 4096
-
 extern LinkLayer currentParams;
 extern int linkFd;
 
