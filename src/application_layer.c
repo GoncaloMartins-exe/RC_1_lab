@@ -58,7 +58,7 @@ int sendControlPacket(unsigned char controlField, const char *filename, long fil
 
 
 int sendDataPacket(const unsigned char *data, int dataLength){
-    unsigned char dataFrame[MAX_PAYLOAD_SIZE];
+    unsigned char dataFrame[MAX_PAYLOAD_SIZE + 3];
     int index = 0;
 
     dataFrame[index++] = C_DATA; // C (Control Field)
@@ -71,6 +71,94 @@ int sendDataPacket(const unsigned char *data, int dataLength){
 
     int result = llwrite(dataFrame, index);
     return result;
+}
+
+
+int receiveControlPacket(unsigned char expectedControl, char *filename, long *fileSize) {
+    unsigned char frame[512];
+    int frameSize = llread(frame);
+
+    if (frameSize < 0) {
+        fprintf(stderr, "Error reading control packet from link layer\n");
+        return -1;
+    }
+
+    // Check control field (C)
+    if (frame[0] != expectedControl) {
+        fprintf(stderr, "Unexpected control field (expected 0x%02X, got 0x%02X)\n",
+                expectedControl, frame[0]);
+        return -1;
+    }
+
+    int index = 1;
+    *fileSize = 0;
+    filename[0] = '\0';
+
+    // Parse the fields (T, L, V)
+    while (index < frameSize) {
+        unsigned char type = frame[index++];
+        unsigned char length = frame[index++];
+
+        if (type == T_SIZE) {
+            // Read size
+            long size = 0; //0x00 00 00 00 00 00 00 00
+            for (int i = 0; i < length; i++) {
+                size = (size << 8) | frame[index + i];
+            }
+            *fileSize = size;
+            index += length;
+
+        } else if (type == T_NAME) {
+            memcpy(filename, frame + index, length);
+            filename[length] = '\0';
+            index += length;
+
+        } else {
+            fprintf(stderr, "Unknown type field (0x%02X)\n", type);
+            return -1;
+        }
+    }
+
+    printf("Received %s packet — File: '%s', Size: %ld bytes\n",
+           expectedControl == C_START ? "START" :
+           expectedControl == C_END   ? "END" : "UNKNOWN",
+           filename, *fileSize);
+
+    return 0;
+}
+
+
+int receiveDataPacket(unsigned char **data, int *dataLength) {
+    unsigned char packet[MAX_PAYLOAD_SIZE + 3];
+    int packetSize = llread(packet);
+
+    if (packetSize < 0) {
+        fprintf(stderr, "Error reading data packet from link layer\n");
+        return -1;
+    }
+
+    if (packet[0] != C_DATA) {
+        fprintf(stderr, "Unexpected control field (expected C_DATA = 0x%02X, got 0x%02X)\n",
+                C_DATA, packet[0]);
+        return -1;
+    }
+
+    *dataLength = (packet[1] << 8) | packet[2];
+    if (*dataLength > MAX_PAYLOAD_SIZE || *dataLength < 0) {
+        fprintf(stderr, "Invalid data length: %d\n", *dataLength);
+        return -1;
+    }
+
+    *data = (unsigned char *)malloc(*dataLength);
+    if (*data == NULL) {
+        perror("Memory allocation failed");
+        return -1;
+    }
+
+    // Copy data bytes
+    memcpy(*data, packet + 3, *dataLength);
+
+    return 0;
 }
 
 
@@ -115,6 +203,53 @@ int transmitterMain(const char *filename) {
 
     printf("File transfer complete!\n");
     fclose(file);
+    return 0;
+}
+
+
+int receiverMain(const char *filename) {
+    char receivedFilename[256];
+    long fileSize = 0;
+
+    printf("Waiting for START control packet...\n");
+
+    if (receiveControlPacket(C_START, receivedFilename, &fileSize) < 0) {
+        fprintf(stderr, "Error receiving START packet.\n");
+        return -1;
+    }
+
+    printf("Receiving file: %s (%ld bytes)\n", receivedFilename, fileSize);
+
+    FILE *file = fopen(receivedFilename, "wb");
+    if (!file) {
+        perror("Error creating output file");
+        return -1;
+    }
+
+    long totalBytesReceived = 0;
+
+    while (1) {
+        unsigned char *data = NULL;
+        int dataLength = 0;
+
+        int res = receiveDataPacket(&data, &dataLength);
+
+        if (res == 0) {
+            fwrite(data, 1, dataLength, file);
+            totalBytesReceived += dataLength;
+            free(data);
+
+            printf("Received %ld / %ld bytes\r", totalBytesReceived, fileSize);
+            fflush(stdout);
+
+        } else if (res < 0) {
+            // Might be END
+            break;
+        }
+    }
+
+    fclose(file);
+    printf("\nFile received successfully: %s (%ld bytes written)\n", receivedFilename, totalBytesReceived);
     return 0;
 }
 
