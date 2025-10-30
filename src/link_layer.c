@@ -19,7 +19,7 @@ extern void alarmHandler(int sig);
 
 LinkLayer currentParams;
 int linkFd = -1;
-FRAME_MAX_SIZE = 4096;
+int FRAME_MAX_SIZE = 4096;
 
 ////////////////////////////////////////////////
 /////////            LLOPEN              ///////
@@ -291,16 +291,39 @@ int buildIFrame(unsigned char *frame, const unsigned char *buf, int bufSize, int
 int llread(unsigned char *packet)
 {
     unsigned char frame[FRAME_MAX_SIZE];
-    int frameSize = readFrame(frame, FRAME_MAX_SIZE);
-    if (frameSize <= 0) {
-        printf("llread: failed to read frame\n");
-        return -1;
+    int frameSize = 0;
+    int tries = 0;
+
+    while (tries < currentParams.nRetransmissions) {
+
+        alarmEnabled = 1;
+        alarm(currentParams.timeout);
+
+        while (alarmEnabled == 1) {
+            frameSize = readFrame(frame, FRAME_MAX_SIZE);
+            if (frameSize > 0) {
+                alarm(0);              // read with success - alarm disabled
+                alarmEnabled = 0;
+                break;
+            }
+        }
+
+        if (frameSize > 0) break; // frame read with success
+
+        tries++;
+        printf("llread: timeout waiting for frame — try %d\n", tries);
+    }
+
+    // Max number of tries
+    if (tries >= currentParams.nRetransmissions && frameSize <= 0) {
+        printf("llread: failed after %d tries — closing connection\n", tries);
+        return -3; // fail reading
     }
 
     int seqNum;
     int payloadSize = validateIFrame(frame, frameSize, packet, &seqNum, FRAME_MAX_SIZE);
 
-    if(payloadSize < 0){
+    if (payloadSize < 0) {
         printf("llread: invalid frame, sending REJ\n");
         sendREJ(seqNum);
         return -1;
@@ -310,36 +333,39 @@ int llread(unsigned char *packet)
     return payloadSize;
 }
 
-int readFrame(unsigned char *frame, int maxSize){
+
+int readFrame(unsigned char *frame, int maxSize)
+{
     unsigned char byte;
     int i = 0;
     int start = 0;
 
-    int maxTries = 10000;
-    while(maxTries-- > 0){
+    while (alarmEnabled == 1) {  // read only when alarm is enabled
         int res = readByteSerialPort(&byte);
-        if(res <= 0) continue;
+        if (res <= 0) continue;
 
-        if(byte == FLAG){
-            if(start == 0){
+        if (byte == FLAG) {
+            if (start == 0) {
                 start = 1;
-                if(i < maxSize) frame[i++] = byte;
+                if (i < maxSize) frame[i++] = byte;
                 else return -1; // overflow
-            }
-            else{
-                if(i < maxSize) frame[i++] = byte;
+            } else {
+                if (i < maxSize) frame[i++] = byte;
                 else return -1; // overflow
                 break;
             }
-        }
-        else if(start){
-            if(i < maxSize) frame[i++] = byte;
+        } else if (start) {
+            if (i < maxSize) frame[i++] = byte;
             else return -1; // overflow
         }
     }
-    if(maxTries == 0 && i > 0){
+
+    // When the alarm expired and didn´t received the full frame
+    if (alarmEnabled == 0 && i == 0) {
+        printf("readFrame: timeout (no data)\n");
         return -1;
     }
+
     return i;
 }
 
@@ -443,19 +469,6 @@ void sendREJ(int sequenceNumber){
 
 //_____________________________________________________________________________________________________________________
 ////////////////////////////////////////////////
-/////////            LLCLOSE             ///////
-////////////////////////////////////////////////
-int llclose()
-{
-    if (linkFd < 0) return -1;
-    if (currentParams.role == LlTx) {
-        return transmissorLLclose();
-    } else {
-        return receptorLLclose();
-    }
-}
-
-////////////////////////////////////////////////
 /////////         TX_LLCLOSE             ///////
 ////////////////////////////////////////////////
 int transmissorLLclose()
@@ -511,35 +524,76 @@ int transmissorLLclose()
 int receptorLLclose()
 {
     unsigned char byte;
+    int tries = 0;
 
-    while (1) {
-        int res = readByteSerialPort(&byte);
-        if (res > 0) {
-            int state = state_machine(byte);
-            if (state == 3) {
-                printf("DISC RECEIVED\n");
-                break;
+    // Wait for DISC for Tx
+    while (tries < currentParams.nRetransmissions) {
+        alarmEnabled = 1;
+        alarm(currentParams.timeout);
+
+        while (alarmEnabled == 1) {
+            int res = readByteSerialPort(&byte);
+            if (res > 0) {
+                int state = state_machine(byte);
+                if (state == 3) { // DISC received
+                    printf("DISC RECEIVED\n");
+                    alarm(0);
+                    alarmEnabled = 0;
+
+                    // Send DISC back
+                    unsigned char DISCONNECT[5] = {FLAG, A_RX, DISC, 0x00, FLAG};
+                    DISCONNECT[3] = DISCONNECT[1] ^ DISCONNECT[2];
+                    writeBytesSerialPort(DISCONNECT, 5);
+                    printf("DISC SENT\n");
+
+                    // Wait for UA
+                    int uaTries = 0;
+                    while (uaTries < currentParams.nRetransmissions) {
+                        alarmEnabled = 1;
+                        alarm(currentParams.timeout);
+
+                        while (alarmEnabled == 1) {
+                            res = readByteSerialPort(&byte);
+                            if (res > 0) {
+                                int stateUA = state_machine(byte);
+                                if (stateUA == 2) { // UA received
+                                    printf("UA RECEIVED\n");
+                                    alarm(0);
+                                    closeSerialPort();
+                                    printf("Connection terminated by receiver.\n");
+                                    return 0;
+                                }
+                            }
+                        }
+                        uaTries++;
+                        printf("Timeout waiting for UA - tries: %d\n", uaTries);
+                    }
+
+                    printf("Failed to receive UA after DISC exchange\n");
+                    closeSerialPort();
+                    return -1;
+                }
             }
         }
+
+        tries++;
+        printf("Timeout waiting for DISC - tries: %d\n", tries);
     }
 
-    unsigned char DISCONNECT[5] = {FLAG, A_RX, DISC, 0x00, FLAG};
-    DISCONNECT[3] = DISCONNECT[1] ^ DISCONNECT[2];
-    writeBytesSerialPort(DISCONNECT, 5);
-    printf("DISC SENT\n");
-
-    while (1) {
-        int res = readByteSerialPort(&byte);
-        if (res > 0) {
-            int state = state_machine(byte);
-            if (state == 2) {
-                printf("UA RECEIVED\n");
-                closeSerialPort();
-                printf("Connection terminated by receiver.\n");
-                return 0;
-            }
-        }
-    }
-
+    printf("Receiver failed to close connection after %d tries\n", currentParams.nRetransmissions);
+    closeSerialPort();
     return -1;
+}
+
+////////////////////////////////////////////////
+/////////            LLCLOSE             ///////
+////////////////////////////////////////////////
+int llclose()
+{
+    if (linkFd < 0) return -1;
+    if (currentParams.role == LlTx) {
+        return transmissorLLclose();
+    } else {
+        return receptorLLclose();
+    }
 }

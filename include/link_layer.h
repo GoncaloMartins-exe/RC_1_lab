@@ -25,9 +25,6 @@
 #define TRUE  1
 #define FALSE 0
 
-extern LinkLayer currentParams;
-extern int linkFd;
-
 typedef enum
 {
     LlTx,
@@ -42,6 +39,9 @@ typedef struct
     int nRetransmissions;
     int timeout;
 } LinkLayer;
+
+extern LinkLayer currentParams;
+extern int linkFd;
 
 // MISC
 #define FALSE 0

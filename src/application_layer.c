@@ -3,14 +3,43 @@
 #include "../include/application_layer.h"
 #include "../include/link_layer.h"
 
-#include <stdio.h>
+
+
+long getFileSize(FILE *file){
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    rewind(file);
+    return size;
+}
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
 {
-    LinkLayer linkLayerParameters = {serialPort, role, baudRate, nTries, timeout};
+    LinkLayer linkLayerParameters;
+    LinkLayerRole linkRole;
 
+    if (strcmp(role, "rx") == 0) {
+        linkRole = LlRx;
+    } else {
+        linkRole = LlTx;
+    }
 
+    strcpy(linkLayerParameters.serialPort, serialPort);
+    linkLayerParameters.role = linkRole;
+    linkLayerParameters.baudRate = baudRate;
+    linkLayerParameters.nRetransmissions = nTries;
+    linkLayerParameters.timeout = timeout;
+    if (llopen(linkLayerParameters) < 0) {
+        fprintf(stderr, "Failed to open link layer connection\n");
+        return;
+    }
+    if (linkRole == LlTx) {
+        transmitterMain(filename);
+    } else {
+        receiverMain(filename);
+    }
+    llclose();
+    return;
 }
 
 
@@ -133,6 +162,9 @@ int receiveDataPacket(unsigned char **data, int *dataLength) {
     int packetSize = llread(packet);
 
     if (packetSize < 0) {
+        if(packetSize == -3){
+            return -3;
+        }
         fprintf(stderr, "Error reading data packet from link layer\n");
         return -1;
     }
@@ -140,7 +172,7 @@ int receiveDataPacket(unsigned char **data, int *dataLength) {
     if (packet[0] != C_DATA) {
         fprintf(stderr, "Unexpected control field (expected C_DATA = 0x%02X, got 0x%02X)\n",
                 C_DATA, packet[0]);
-        return -1;
+        return -2;
     }
 
     *dataLength = (packet[1] << 8) | packet[2];
@@ -244,7 +276,22 @@ int receiverMain(const char *filename) {
 
         } else if (res < 0) {
             // Might be END
-            break;
+            if(res == -1){
+                fprintf(stderr, "Error receiving data packet.\n");
+                continue;
+            }
+        
+            if(res == -2){
+                fprintf(stderr, "Error receiving data packet.\n");
+                fclose(file);
+                return -1;
+
+            }
+            if(res == -3){
+                fclose(file);
+                return -1;
+            }
+            
         }
     }
 
@@ -259,11 +306,4 @@ const char *getBaseFileName(const char *path) {
     if (slash == NULL)
         return path;
     return slash + 1;
-}
-
-long getFileSize(FILE *file) {
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    rewind(file);
-    return size;
 }

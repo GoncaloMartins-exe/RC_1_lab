@@ -4,6 +4,10 @@
 #ifndef _APPLICATION_LAYER_H_
 #define _APPLICATION_LAYER_H_
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #define C_START 0x01
 #define C_DATA 0x02
 #define C_END 0x03
