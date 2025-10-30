@@ -28,12 +28,16 @@ E:.
 │   ├── application_layer.c
 │   └── link_layer.c
 │
-└── include/                 # Header files (interfaces)
-    ├── serial_port.h
-    ├── alarm.h
-    ├── state_machine.h
-    ├── application_layer.h
-    └── link_layer.h
+├── include/                 # Header files (interfaces)
+│   ├── serial_port.h
+│   ├── alarm.h
+│   ├── state_machine.h
+│   ├── application_layer.h
+│   └── link_layer.h
+│
+└── .vscode/                 # VS Code development settings
+    ├── settings.json
+    └── c_cpp_properties.json
 ```
 
 ---
