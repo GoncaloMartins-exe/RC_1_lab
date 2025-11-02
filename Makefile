@@ -18,35 +18,34 @@ RX_FILE = penguin-received.gif
 
 # Main
 .PHONY: all
-all: main cable
+all: $(BIN)/main $(BIN)/cable
 
-main: $(SRC)/*.c
-	$(CC) $(CFLAGS) -o $(BIN)/$@ $^
+$(BIN)/main: $(SRC)/*.c
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(BIN)/cable: $(CABLE)/cable.c
+	$(CC) $(CFLAGS) -o $@ $^
 
 .PHONY: run_tx
-run_tx: main
+run_tx: $(BIN)/main
 	./$(BIN)/main $(TX_SERIAL_PORT) $(BAUD_RATE) tx $(TX_FILE)
 
 .PHONY: run_rx
-run_rx: main
+run_rx: $(BIN)/main
 	./$(BIN)/main $(RX_SERIAL_PORT) $(BAUD_RATE) rx $(RX_FILE)
 
 .PHONY: check_files
 check_files:
 	diff -s $(TX_FILE) $(RX_FILE) || exit 0
 
-# Cable
-cable: $(CABLE)/cable.c
-	$(CC) $(CFLAGS) -o $(BIN)/$@ $^
-
 .PHONY: run_cable
-run_cable: cable
+run_cable: $(BIN)/cable
 	@which -s socat || { echo "Error: Could not find socat. Install socat and try again."; exit 1; }
 	sudo ./$(BIN)/cable
 
-# Clean
 .PHONY: clean
 clean:
 	rm -f $(BIN)/main
 	rm -f $(BIN)/cable
 	rm -f $(RX_FILE)
+

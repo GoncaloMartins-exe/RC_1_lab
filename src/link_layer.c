@@ -179,7 +179,6 @@ int llwrite(const unsigned char *buf, int bufSize)
         else if (control == C_REJ0 || control == C_REJ1) {
             // REJ received — retransmit
             printf("llwrite: REJ received — retransmitting\n");
-            tries++;
             continue;
         }
         else {
